@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Games JSON Editor</title>
+<style>
+:root{--bg:#14151a;--card:#1d1f27;--line:#2c2f3a;--text:#e8e9ee;--mut:#9094a3;--acc:#47a6f9;--bad:#f44336;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:dark}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#f3f4f7;--card:#fff;--line:#d9dce4;--text:#1b1d24;--mut:#666b7a;color-scheme:light}}
+:root[data-theme="dark"]{--bg:#14151a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px system-ui,-apple-system,Segoe UI,sans-serif}
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-bottom:1px solid var(--line);padding:12px 16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+h1{font-size:18px;margin:0 8px 0 0}
+button,input,select,textarea{font:inherit;color:var(--text);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:7px 12px}
+button{cursor:pointer}button:hover{border-color:var(--acc)}
+button.p{background:var(--acc);color:#001;border-color:var(--acc);font-weight:600}
+button.d{color:var(--bad)}
+.tabs button.on{background:var(--acc);color:#001;border-color:var(--acc)}
+main{padding:16px;max-width:1200px;margin:auto}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.bar input[type=search]{flex:1;min-width:160px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.c{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;cursor:pointer}
+.c:hover{border-color:var(--hc,var(--acc))}
+.c img{width:100%;aspect-ratio:3/4;object-fit:cover;background:#000;display:block}
+.c .i{padding:8px;font-size:13px}.c b{display:block;margin-bottom:3px}
+.tg{color:var(--mut);font-size:12px}
+.pop{float:right;background:var(--hc,var(--acc));color:#000;border-radius:6px;padding:0 6px;font-size:12px;font-weight:700}
+dialog{background:var(--card);color:var(--text);border:1px solid var(--line);border-radius:12px;width:min(560px,94vw);padding:18px}
+dialog::backdrop{background:#000a}
+label{display:block;margin:10px 0 4px;color:var(--mut);font-size:13px}
+dialog input[type=text],dialog input[type=url]{width:100%}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border-radius:99px;padding:3px 10px;font-size:13px;cursor:pointer;border:1px solid var(--line)}
+.chip.on{background:var(--acc);color:#001;border-color:var(--acc)}
+.row{display:flex;gap:8px;align-items:center}
+.foot{display:flex;gap:8px;margin-top:16px;justify-content:flex-end;flex-wrap:wrap}
+textarea{width:100%;height:50vh;font-family:ui-monospace,monospace;font-size:12px}
+.prev{width:60px;height:80px;object-fit:cover;border-radius:6px;background:#000}
+.msg{color:var(--mut);font-size:13px}
+</style>
+</head>
+<body>
+<header>
+<h1>🎮 Games Editor</h1>
+<div class="tabs row"><button id="tg" class="on">Games</button><button id="tw">Wishlist</button></div>
+<span style="flex:1"></span>
+<button id="reset">Reset to original</button>
+<button id="load">Load JSON…</button>
+<button id="raw">View / paste JSON</button>
+<button id="copy" class="p">Copy JSON</button>
+<input type="file" id="file" accept=".json,application/json" hidden>
+</header>
+<main>
+<div class="bar">
+<input type="search" id="q" placeholder="Search name or tag…">
+<select id="sort"><option value="file">File order</option><option value="name">Name A–Z</option><option value="pop">Popularity</option></select>
+<button id="add" class="p">+ Add</button>
+</div>
+<div class="msg" id="msg"></div>
+<div class="grid" id="grid"></div>
+</main>
+
+<dialog id="ed"><h2 id="et" style="margin:0 0 4px;font-size:17px"></h2>
+<label>Name</label><input type="text" id="fn">
+<label>Tags (click to toggle)</label><div class="chips" id="chips"></div>
+<div class="row" style="margin-top:8px"><input type="text" id="nt" placeholder="New tag" style="flex:1"><button id="atag">Add tag</button></div>
+<label>Image URL</label><div class="row"><input type="url" id="fi" style="flex:1"><img class="prev" id="pv" alt=""></div>
+<label>Store / site URL</label><input type="url" id="fu">
+<div id="popw"><label>Popularity: <b id="pl"></b></label><input type="range" id="fp" min="1" max="10" style="width:100%"></div>
+<label>Hover colour</label><div class="row"><input type="color" id="fc" style="padding:2px;width:50px"><input type="text" id="fh" style="width:110px"></div>
+<div class="foot"><button id="del" class="d">Delete</button><button id="dup">Duplicate</button><button id="mv">Move to other list</button><span style="flex:1"></span><button id="cx">Cancel</button><button id="sv" class="p">Save</button></div>
+</dialog>
+
+<dialog id="rw"><h2 style="margin:0 0 8px;font-size:17px">Raw JSON</h2>
+<textarea id="ta" spellcheck="false"></textarea>
+<div class="foot"><button id="rc">Close</button><button id="ra" class="p">Apply pasted JSON</button></div></dialog>
+
+<script>
+const $=id=>document.getElementById(id);
+let data={games:[],wishlist:[]},tab='games',cur=null,tags=[];
+const KEY='gamesEditorData';
+const DEFAULT={"games":[
+{"name":"R.E.P.O.","tags":["Co-op","Funny","Spooky"],"image":"https://steamcdn-a.akamaihd.net/steam/apps/3241660/library_600x900.jpg","url":"https://store.steampowered.com/app/3241660/REPO/","popularity":"9","hoverColor":"#e49f16"},
+{"name":"Jackbox Party Packs","tags":["PvP","Co-op","Funny","Party"],"image":"https://steamcdn-a.akamaihd.net/steam/apps/331670/library_600x900.jpg","url":"https://store.steampowered.com/developer/jackboxgames","popularity":"7","hoverColor":"#f9ff79"},
+{"name":"Pummel Party","tags":["PvP","Funny","Party"],"image":"https://steamcdn-a.akamaihd.net/steam/apps/880940/library_600x900.jpg","url":"https://store.steampowered.com/app/880940/Pummel_Party/","popularity":"8","hoverColor":"#47a6f9"},
+{"name":"Spider Roulette","tags":["PvP","Funny","Spooky"],"image":"https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/3900650/27437858b99c7faccf9fa84cb85002da4f620cb0/library_capsule.jpg","url":"https://store.steampowered.com/app/3900650/Spider_Roulette/","popularity":"7","hoverColor":"#9330a4"},
+{"name":"BOMBANANA!","tags":["PvP","Funny"],"image":"https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/4656000/feaeb8f6d4b829252a902f0acd2d8fd385271871/library_capsule.jpg","url":"https://store.steampowered.com/app/4656000/BOMBANANA/","popularity":"6","hoverColor":"#c5120c"},
+{"name":"Lethal Company","tags":["Co-op","Spooky"],"image":"https://steamcdn-a.akamaihd.net/steam/apps/1966720/library_600x900.jpg","url":"https://store.steampowered.com/app/1966720/Lethal_Company/","popularity":"5","hoverColor":"#c5120c"},
+{"name":"Buckshot Roulette","tags":["PvP","Spooky"],"image":"https://steamcdn-a.akamaihd.net/steam/apps/2835570/library_600x900.jpg","url":"https://store.steampowered.com/app/2835570/Buckshot_Roulette/","popularity":"4","hoverColor":"#9b7c65"},
+{"name":"PEAK","tags":["Co-op","Exploration","Funny"],"image":"https://imgs.search.brave.com/_ghi1HbCbpqqfBAdztJ4MCQ1HmxlppeEoEfICEM9UEE/rs:fit:860:0:0:0/g:ce/aHR0cHM6Ly9pbWFn/ZXMuaWdkYi5jb20v/aWdkYi9pbWFnZS91/cGxvYWQvdF83MjBw/L2NvYTFpMS5qcGc","url":"https://store.steampowered.com/app/3527290/PEAK/","popularity":"7","hoverColor":"#7c33e6"},
+{"name":"Left 4 Dead 2","tags":["Co-op","FPS","Funny","PvP"],"image":"https://steamcdn-a.akamaihd.net/steam/apps/550/library_600x900.jpg","url":"https://store.steampowered.com/app/550/Left_4_Dead_2/","popularity":"7","hoverColor":"#CBE657"},
+{"name":"Tabletop Simulator","tags":["PvP","Board/Card"],"image":"https://steamcdn-a.akamaihd.net/steam/apps/286160/library_600x900.jpg","url":"https://store.steampowered.com/app/286160/Tabletop_Simulator/","popularity":"6","hoverColor":"#ffa726"},
+{"name":"Helldivers 2","tags":["Co-op","Exploration","Survival","Shooter"],"image":"https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/553850/14293cf6c4eeb6959b9333ecd42fcc021a8fc1e3/header.jpg","url":"https://store.steampowered.com/app/553850/HELLDIVERS_2/","popularity":"4","hoverColor":"#f9ff79"},
+{"name":"Phasmophobia","tags":["Co-op","Spooky"],"image":"https://steamcdn-a.akamaihd.net/steam/apps/739630/library_600x900.jpg","url":"https://store.steampowered.com/app/739630/Phasmophobia","popularity":"4","hoverColor":"#696969"},
+{"name":"Content Warning","tags":["Co-op","Funny","Spooky"],"image":"https://steamcdn-a.akamaihd.net/steam/apps/2881650/library_600x900.jpg","url":"https://store.steampowered.com/app/2881650/Content_Warning","popularity":"4","hoverColor":"#FFD700"},
+{"name":"ARC Raiders","tags":["Co-op","PvP","Shooter"],"image":"https://steamcdn-a.akamaihd.net/steam/apps/1808500/library_600x900.jpg","url":"https://store.steampowered.com/app/1808500/ARC_Raiders","popularity":"4","hoverColor":"#9330a4"},
+{"name":"Ghost Watchers","tags":["Co-op","Spooky"],"image":"https://steamcdn-a.akamaihd.net/steam/apps/1850740/library_600x900.jpg","url":"https://store.steampowered.com/app/1850740/Ghost_Watchers","popularity":"3","hoverColor":"#9b7c65"},
+{"name":"Rocket League","tags":["PvP","Driving","Sport","Free to Play"],"image":"https://steamcdn-a.akamaihd.net/steam/apps/252950/library_600x900.jpg","url":"https://store.steampowered.com/app/252950/Rocket_League/","popularity":"4","hoverColor":"#47a6f9"},
+{"name":"Splitgate","tags":["PvP","Shooter","Free to Play"],"image":"https://steamcdn-a.akamaihd.net/steam/apps/2918300/library_600x900.jpg","url":"https://store.steampowered.com/app/2918300/Splitgate_2_Beta","popularity":"3","hoverColor":"#f9b53f"},
+{"name":"Guilty As Sock","tags":["Co-op","PvP","Funny","Roleplay"],"image":"https://steamcdn-a.akamaihd.net/steam/apps/3400930/library_600x900.jpg","url":"https://store.steampowered.com/app/3400930/Guilty_as_Sock/","popularity":"7","hoverColor":"#FFD700"},
+{"name":"Murky Divers","tags":["Co-op","Spooky"],"image":"https://steamcdn-a.akamaihd.net/steam/apps/2963880/library_600x900.jpg","url":"https://store.steampowered.com/app/2963880/Murky_Divers","popularity":"2","hoverColor":"#4ba333"},
+{"name":"Nuclear Nightmare","tags":["Co-op","PvP","Social Deduction"],"image":"https://steamcdn-a.akamaihd.net/steam/apps/2909110/library_600x900.jpg","url":"https://store.steampowered.com/app/2909110/Nuclear_Nightmare","popularity":"1","hoverColor":"#47a6f9"},
+{"name":"Among Us","tags":["Co-op","PvP","Social Deduction"],"image":"https://steamcdn-a.akamaihd.net/steam/apps/945360/library_600x900.jpg","url":"https://store.steampowered.com/app/945360/Among_Us/","popularity":"6","hoverColor":"#c5120c"},
+{"name":"Liar's Bar","tags":["PvP","Board/Card","Social Deduction"],"image":"https://steamcdn-a.akamaihd.net/steam/apps/3097560/library_600x900.jpg","url":"https://store.steampowered.com/app/3097560/Liars_Bar","popularity":"1","hoverColor":"#c5120c"},
+{"name":"Minecraft","tags":["Co-op","PvP","Exploration","Survival","Creative"],"image":"https://preview.redd.it/which-one-is-the-superior-cover-art-v0-g4urr2d8zu3d1.png?width=1080&crop=smart&auto=webp&s=4ad01254b4f3bd2f8997aad4dd47a6ee40a6e426","url":"https://www.minecraft.net/","popularity":"8","hoverColor":"#32CD32"},
+{"name":"Team Fortress 2","tags":["PvP","Shooter","Action","Free to Play"],"image":"https://steamcdn-a.akamaihd.net/steam/apps/440/library_600x900.jpg","url":"https://store.steampowered.com/app/440/Team_Fortress_2/","popularity":"2","hoverColor":"#e77426"},
+{"name":"Chess","tags":["PvP","Board/Card","Strategy"],"image":"https://imgs.search.brave.com/lOGK9n_LZQZANWslWAz3vQQmHFkF31DiH3xQ-OxAerc/rs:fit:500:0:1:0/g:ce/aHR0cHM6Ly9pLnBp/bmltZy5jb20vb3Jp/Z2luYWxzLzQ0L2Nj/L2EwLzQ0Y2NhMDZh/Mzg5MGM5Y2ZhODQx/NjkxMWViZTlkY2E2/LmpwZw","url":"https://lichess.org/","popularity":"3","hoverColor":"#f1f1f1"},
+{"name":"RV There Yet","tags":["Co-op","Funny"],"image":"https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/3949040/fc6856c47b9c695c24a2e64c60b619d7762b9717/capsule_616x353.jpg?t=1761050176","url":"https://store.steampowered.com/app/3949040/RV_There_Yet/","popularity":"5","hoverColor":"#e49f16"},
+{"name":"Ultimate Drinking Cards","tags":["Party","Funny","Board/Card"],"image":"https://raw.githubusercontent.com/kay-who-codes/Ultimate-Drinking-Cards/main/Non-App/App%20Image.png","url":"https://kay-who-codes.github.io/Ultimate-Drinking-Cards/","popularity":"5","hoverColor":"#f9f9f9"}
+],"wishlist":[
+{"name":"Crashout Crew","tags":["Action","Co-op","Driving"],"image":"https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/3583210/93b822f30cab98333b8f7f4dd43ce543f4c8b355/capsule_616x353.jpg?t=1759425887","url":"https://store.steampowered.com/app/3583210/Crashout_Crew/","hoverColor":"#47a6f9"},
+{"name":"Mage Arena","tags":["PvP"],"image":"https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/3716600/e245a7cf3cadf5331c1155b6c082a38fe01a2ae9/capsule_616x353.jpg?t=1754585254","url":"https://store.steampowered.com/app/3716600/Mage_Arena/","hoverColor":"#9b7c65"},
+{"name":"A Gentleman's Dispute","tags":["PvP","Shooter"],"image":"https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/2820700/3d095261c525d063f2044461fc8baddc9d8b0266/capsule_616x353.jpg?t=1759166855","url":"https://store.steampowered.com/app/2820700/A_Gentlemens_Dispute/?curator_clanid=4777282","hoverColor":"#f44336"},
+{"name":"Demonologist","tags":["Co-op","Spooky"],"image":"https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/1929610/capsule_616x353.jpg?t=1751279240","url":"https://store.steampowered.com/app/1929610/Demonologist","hoverColor":"#8b0000"},
+{"name":"Grounded","tags":["Survival","Co-op"],"image":"https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/962130/capsule_616x353.jpg?t=1727719725","url":"https://store.steampowered.com/app/962130/Grounded","hoverColor":"#90ee90"},
+{"name":"Sledding Game","tags":["PvP","Sport"],"image":"https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/3438850/b6d53cfeb297d0a5f481d72b390a749d59fdcf99/capsule_616x353.jpg?t=1758903286","url":"https://store.steampowered.com/app/3438850/Sledding_Game","hoverColor":"#87ceeb"}
+]};
+try{const s=localStorage.getItem(KEY);if(s)data=JSON.parse(s)}catch(e){}
+if(!((data.games&&data.games.length)||(data.wishlist&&data.wishlist.length)))data=JSON.parse(JSON.stringify(DEFAULT));
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(data))}catch(e){}};
+const allTags=()=>[...new Set(['games','wishlist'].flatMap(k=>(data[k]||[]).flatMap(g=>g.tags||[])))].sort();
+function order(g){const o={name:g.name,tags:g.tags||[],image:g.image||'',url:g.url||''};if(tab==='games'||g.popularity!==undefined)o.popularity=g.popularity;o.hoverColor=g.hoverColor||'#47a6f9';return{...g,...o,...o}}
+function render(){
+ $('tg').classList.toggle('on',tab==='games');$('tw').classList.toggle('on',tab==='wishlist');
+ const q=$('q').value.toLowerCase(),s=$('sort').value;
+ let l=(data[tab]||[]).map((g,i)=>({g,i})).filter(({g})=>!q||g.name.toLowerCase().includes(q)||(g.tags||[]).some(t=>t.toLowerCase().includes(q)));
+ if(s==='name')l.sort((a,b)=>a.g.name.localeCompare(b.g.name));
+ if(s==='pop')l.sort((a,b)=>(+b.g.popularity||0)-(+a.g.popularity||0));
+ $('msg').textContent=`${l.length} of ${(data[tab]||[]).length} shown`;
+ $('grid').innerHTML=l.map(({g,i})=>`<div class="c" data-i="${i}" style="--hc:${esc(g.hoverColor)}"><img loading="lazy" src="${esc(g.image)}" alt=""><div class="i">${g.popularity?`<span class="pop">${esc(g.popularity)}</span>`:''}<b>${esc(g.name)}</b><span class="tg">${esc((g.tags||[]).join(', '))}</span></div></div>`).join('');
+ save();
+}
+function chips(){$('chips').innerHTML=[...new Set([...allTags(),...tags])].sort().map(t=>`<span class="chip ${tags.includes(t)?'on':''}" data-t="${esc(t)}">${esc(t)}</span>`).join('')}
+function open(i){
+ cur=i;const g=i==null?{name:'',tags:[],image:'',url:'',popularity:'5',hoverColor:'#47a6f9'}:data[tab][i];
+ $('et').textContent=i==null?'Add to '+tab:'Edit '+g.name;
+ $('fn').value=g.name;tags=[...(g.tags||[])];chips();$('fi').value=g.image||'';$('pv').src=g.image||'';$('fu').value=g.url||'';
+ $('popw').style.display=tab==='games'?'':'none';
+ $('fp').value=g.popularity||5;$('pl').textContent=$('fp').value;
+ const c=/^#[0-9a-f]{6}$/i.test(g.hoverColor)?g.hoverColor:'#47a6f9';$('fc').value=c;$('fh').value=g.hoverColor||c;
+ ['del','dup','mv'].forEach(k=>$(k).style.display=i==null?'none':'');
+ $('mv').textContent='Move to '+(tab==='games'?'wishlist':'games');
+ $('ed').showModal();
+}
+$('grid').onclick=e=>{const c=e.target.closest('.c');if(c)open(+c.dataset.i)};
+$('add').onclick=()=>open(null);
+$('tg').onclick=()=>{tab='games';render()};$('tw').onclick=()=>{tab='wishlist';render()};
+$('q').oninput=render;$('sort').onchange=render;
+$('chips').onclick=e=>{const t=e.target.dataset.t;if(!t)return;tags=tags.includes(t)?tags.filter(x=>x!==t):[...tags,t];chips()};
+$('atag').onclick=()=>{const t=$('nt').value.trim();if(t&&!tags.includes(t))tags.push(t);$('nt').value='';chips()};
+$('fi').oninput=()=>$('pv').src=$('fi').value;
+$('fp').oninput=()=>$('pl').textContent=$('fp').value;
+$('fc').oninput=()=>$('fh').value=$('fc').value;
+$('fh').oninput=()=>{if(/^#[0-9a-f]{6}$/i.test($('fh').value))$('fc').value=$('fh').value};
+$('cx').onclick=()=>$('ed').close();
+$('sv').onclick=()=>{
+ const name=$('fn').value.trim();if(!name){$('fn').focus();return}
+ const base=cur==null?{}:data[tab][cur];
+ const g={...base,name,tags:[...tags],image:$('fi').value.trim(),url:$('fu').value.trim()};
+ if(tab==='games')g.popularity=String($('fp').value);
+ g.hoverColor=$('fh').value.trim()||$('fc').value;
+ const out={};['name','tags','image','url','popularity','hoverColor'].forEach(k=>{if(g[k]!==undefined)out[k]=g[k]});
+ const fin={...g,...out};
+ (data[tab]=data[tab]||[]);cur==null?data[tab].push(fin):data[tab][cur]=fin;
+ $('ed').close();render();
+};
+$('del').onclick=()=>{if(confirm('Delete "'+data[tab][cur].name+'"?')){data[tab].splice(cur,1);$('ed').close();render()}};
+$('dup').onclick=()=>{const g=JSON.parse(JSON.stringify(data[tab][cur]));g.name+=' (copy)';data[tab].splice(cur+1,0,g);$('ed').close();render()};
+$('mv').onclick=()=>{const o=tab==='games'?'wishlist':'games',g=data[tab].splice(cur,1)[0];
+ if(o==='wishlist')delete g.popularity;else g.popularity=g.popularity||'5';
+ (data[o]=data[o]||[]).push(g);$('ed').close();render()};
+const pretty=()=>JSON.stringify(data,null,4);
+$('copy').onclick=async()=>{try{await navigator.clipboard.writeText(pretty());$('copy').textContent='Copied ✓'}catch(e){$('raw').click();$('ta').select()}setTimeout(()=>$('copy').textContent='Copy JSON',1500)};
+$('raw').onclick=()=>{$('ta').value=pretty();$('rw').showModal()};
+$('rc').onclick=()=>$('rw').close();
+$('ra').onclick=()=>{try{const d=JSON.parse($('ta').value);if(!d.games&&!d.wishlist)throw 0;data={games:[],wishlist:[],...d};$('rw').close();render()}catch(e){alert('Invalid JSON (needs "games" and/or "wishlist" arrays)')}};
+$('load').onclick=()=>$('file').click();
+$('reset').onclick=()=>{if(confirm('Discard all edits and reload the original data?')){data=JSON.parse(JSON.stringify(DEFAULT));render()}};
+$('file').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());data={games:[],wishlist:[],...d};render()}catch(x){alert('Could not parse that file as JSON')}};
+render();
+if(!(data.games.length||data.wishlist.length))$('msg').textContent='Click “Load JSON…” or “View / paste JSON” to start.';
+</script>
+</body>
+</html>
